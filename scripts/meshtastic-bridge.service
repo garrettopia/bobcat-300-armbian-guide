@@ -1,0 +1,14 @@
+[Unit]
+Description=Garrettopia Meshtastic to Discord/Telegram Relay Bridge
+After=network.target ser2net.service
+Requires=ser2net.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /usr/local/bin/meshtastic_bridge.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

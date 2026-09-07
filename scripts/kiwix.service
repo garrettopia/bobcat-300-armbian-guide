@@ -1,0 +1,13 @@
+[Unit]
+Description=Kiwix Offline Knowledge Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/kiwix-serve --port=8088 /var/kiwix/data/wikipedia_en_simple_all_nopic_2026-05.zim
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

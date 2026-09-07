@@ -1,0 +1,12 @@
+[Unit]
+Description=Initialize and Power Semtech SX1302 LoRa Hardware
+Before=network.target rnsd.service nomadnet.service meshtasticd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/reset_lgw.sh start
+RemainAfterExit=yes
+ExecStop=/usr/local/bin/reset_lgw.sh stop
+
+[Install]
+WantedBy=multi-user.target

@@ -7,7 +7,7 @@
 
 A complete, field-tested guide to liberating the **Bobcat Miner 300 (G290 / G295 revision, FCC ID: `2AZCKMINER300`)** from its locked-down factory Helium firmware and converting it into an autonomous, 24/7 **Armbian Linux server** installed permanently on its internal **64GB eMMC** storage.
 
-Ideal for running a high-power **Meshtastic Base Station (`meshtasticd`)** using the onboard Semtech LoRa concentrator, an off-grid **Reticulum (`rns`) node**, or a general-purpose ARM64 Linux home server.
+Ideal for running a high-power **Meshtastic Base Station** (via attached USB LoRa transceiver), an 8-channel **LoRaWAN / The Things Network gateway** using the onboard Semtech SX1302 concentrator, an off-grid **Reticulum (`rns`) node**, or a general-purpose ARM64 Linux home server.
 
 ---
 
@@ -21,12 +21,18 @@ Ideal for running a high-power **Meshtastic Base Station (`meshtasticd`)** using
    * [Step 3: First Boot & Interactive Shell Access](#step-3-first-boot--interactive-shell-access)
    * [Step 4: Permanent Clone to Internal 64GB eMMC](#step-4-permanent-clone-to-internal-64gb-emmc)
    * [Step 5: Standalone Autonomous Boot](#step-5-standalone-autonomous-boot)
-5. [Setting Up Meshtastic & Reticulum](#setting-up-meshtastic--reticulum)
-   * [Onboard LoRa Concentrator (SPI5)](#onboard-lora-concentrator-spi5)
-   * [Installing Meshtastic Native Linux Daemon (`meshtasticd`)](#installing-meshtasticd)
-   * [Installing Reticulum Network Stack (`rns`)](#installing-reticulum)
-6. [Troubleshooting & Gotchas](#troubleshooting--gotchas)
-7. [License & Acknowledgments](#license--acknowledgments)
+5. [Setting Up the Onboard Semtech SX1302 LoRa Concentrator](#setting-up-the-onboard-semtech-sx1302-lora-concentrator)
+   * [Power & Reset GPIO Details](#-critical-hardware-detail-power--reset-gpios)
+   * [Hardware Initialization Script](#step-1-install-the-hardware-initialization-script)
+   * [Enable 24/7 Hardware Power on Boot](#step-2-enable-247-hardware-power-on-boot)
+   * [Verify Hardware Health & Register Communication](#step-3-verify-hardware-health--register-communication)
+6. [Wireless Architecture: LoRaWAN, Meshtastic & Reticulum](#wireless-architecture-lorawan-meshtastic--reticulum)
+   * [1. Onboard Semtech SX1302: Commercial LoRaWAN Gateway](#1-onboard-semtech-sx1302-commercial-lorawan-gateway)
+   * [2. Meshtastic Base Station: Adding an SX1262 Node via USB](#2-meshtastic-base-station-adding-an-sx1262-node-via-usb)
+   * [3. Reticulum & NomadNet: Native 24/7 Off-Grid Mesh](#3-reticulum--nomadnet-native-247-off-grid-mesh)
+7. [Troubleshooting & Gotchas](#troubleshooting--gotchas)
+8. [License & Acknowledgments](#license--acknowledgments)
+
 
 ---
 
@@ -189,50 +195,144 @@ ssh root@<BOBCAT_IP>
 
 ---
 
-## Setting Up Meshtastic & Reticulum
+## Setting Up the Onboard Semtech SX1302 LoRa Concentrator
 
-### Onboard LoRa Concentrator (SPI5)
-The Bobcat Miner 300 contains an internal mini-PCIe slot housing a **Semtech SX1302 / SX1308** multi-channel LoRa concentrator card. In Linux, the SPI bus is exposed as:
-* `/dev/spidev5.0`
-* `/dev/spidev5.1`
+The Bobcat Miner 300 contains an internal mini-PCIe slot housing a high-performance **Semtech SX1302 multi-channel LoRa Concentrator card**. 
 
-### Installing Meshtastic Native Linux Daemon (`meshtasticd`)
-You can turn the Bobcat into a high-capacity Meshtastic router or base station:
+### ⚡ Critical Hardware Detail: Power & Reset GPIOs
+By default, the standard Linux kernel does **not** energize the mini-PCIe slot, leaving the LoRa card unpowered and unresponsive. To wake the SX1302 chip and communicate over SPI, you must control three specific Rockchip RK3566 GPIOs:
 
-1. **Add the Meshtastic repository:**
-   ```bash
-   sudo apt update && sudo apt install -y curl gpg
-   curl -fsSL https://raw.githubusercontent.com/meshtastic/meshtastic-debian-repo/main/meshtastic.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/meshtastic.gpg
-   echo "deb [signed-by=/etc/apt/trusted.gpg.d/meshtastic.gpg] https://meshtastic.github.io/meshtastic-debian-repo/ stable main" | sudo tee /etc/apt/sources.list.d/meshtastic.list
-   sudo apt update
-   sudo apt install -y meshtasticd
-   ```
+| Signal | SoC GPIO Number | Pin Name | Description |
+| :--- | :--- | :--- | :--- |
+| **LoRa Power Enable** | **`125`** | `GPIO3_D5` | Controls 3.3V power rails to the mini-PCIe slot (`1 = ON`) |
+| **LoRa Extra Power**  | **`122`** | `GPIO3_D2` | Secondary power gating for RF front-end (`1 = ON`) |
+| **SX1302 Reset**      | **`149`** | `GPIO4_B5` | Hardware reset line (Active High pulse, then Low for normal operation) |
+| **LoRa SPI Interface**| — | **`/dev/spidev5.0`** | Primary SPI bus interface for SX1302 register communication |
 
-2. **Configure `/etc/meshtasticd/config.yaml`:**
-   Configure the SPI interface to point to `/dev/spidev5.0`:
-   ```yaml
-   Lora:
-     Module: sx1302
-     Device: /dev/spidev5.0
-     Channel: 0
-   ```
-
-3. **Start and enable the service:**
-   ```bash
-   sudo systemctl enable --now meshtasticd
-   ```
-
-### Installing Reticulum (`rns`)
-Reticulum is a cryptography-based, off-grid mesh networking stack:
-
+### Step 1: Install the Hardware Initialization Script
+Use the included [`scripts/reset_lgw.sh`](scripts/reset_lgw.sh) script:
 ```bash
-sudo apt install -y python3-pip python3-venv
-pip3 install --break-system-packages rns
+sudo cp scripts/reset_lgw.sh /usr/local/bin/reset_lgw.sh
+sudo chmod +x /usr/local/bin/reset_lgw.sh
 
-# Initialize Reticulum
-rnsd --version
+# Power on and reset the LoRa module:
+sudo /usr/local/bin/reset_lgw.sh start
 ```
-Edit `~/.reticulum/config` to bridge across your local Ethernet/Wi-Fi and the LoRa interface for long-distance off-grid packets.
+
+### Step 2: Enable 24/7 Hardware Power on Boot
+Install the systemd unit so the LoRa card is automatically energized whenever the Bobcat boots:
+```bash
+sudo cp scripts/lora-hardware-init.service /etc/systemd/system/lora-hardware-init.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now lora-hardware-init.service
+```
+
+### Step 3: Verify Hardware Health & Register Communication
+You can verify two-way communication with the SX1302 silicon using Semtech's native diagnostic suite:
+```bash
+git clone https://github.com/Lora-net/sx1302_hal.git /tmp/sx1302_hal
+cd /tmp/sx1302_hal && make
+
+# Run register diagnostics across SPI5:
+cp /usr/local/bin/reset_lgw.sh libloragw/reset_lgw.sh
+cd libloragw
+./test_loragw_reg -d /dev/spidev5.0
+```
+Expected output confirming 100% healthy silicon:
+```text
+Opening SPI communication interface: /dev/spidev5.0
+Note: chip version is 0x10 (v1.0)
+## TEST#1: read all registers and check default value -> TEST#1 PASSED
+## TEST#2: read/write test on all non-read-only registers -> TEST#2 PASSED
+Closing SPI communication interface
+```
+
+---
+
+## Wireless Architecture: LoRaWAN, Meshtastic & Reticulum
+
+Understanding the radio capabilities of the repurposed Bobcat 300 will help you choose the best mesh setup for your needs:
+
+### 1. Onboard Semtech SX1302: Commercial LoRaWAN Gateway (The Things Network)
+The card in the mini-PCIe slot is an **8-channel commercial LoRaWAN concentrator** capable of receiving packets simultaneously on 8 distinct frequencies.
+
+1. **Build the SX1302 HAL & Packet Forwarder**:
+   ```bash
+   git clone https://github.com/Lora-net/sx1302_hal.git /opt/sx1302_hal
+   cd /opt/sx1302_hal
+   # Patch loragw_hal.c to treat missing I2C STTS751 temperature sensor non-fatally
+   make
+   ```
+2. **Configure US915 Frequency Plan & Gateway EUI**:
+   Derive your unique 64-bit Gateway EUI from your ethernet MAC address (e.g. `76:81:f3:43:94:72` -> `7681F3FFFE439472`) and set `server_address` to `nam1.cloud.thethings.network` on port `1700`.
+3. **Automate via Systemd**:
+   ```bash
+   sudo cp scripts/ttn-packet-forwarder.service /etc/systemd/system/
+   sudo systemctl enable --now ttn-packet-forwarder.service
+   ```
+
+### 2. Meshtastic Base Station: Adding an SX1262 Node via USB
+Meshtastic's peer-to-peer (P2P) protocol is engineered specifically for **single-channel transceivers** (like the **Semtech SX1262** or **SX1276**) rather than multi-channel concentrators.
+
+To turn your Bobcat into a high-powered 24/7 **Meshtastic Base Station**:
+1. **Connect a Node to the Bobcat's USB Port**:
+   * Plug in an inexpensive **Heltec V3 ($15–$20)**, **LilyGO T-Beam**, or USB LoRa dongle.
+2. **The Bobcat Acts as the 24/7 Brain & Gateway**:
+   * The Bobcat supplies continuous 12V-regulated power to the node.
+   * Runs the Meshtastic serial-to-TCP bridge (`ser2net`) on port **`4403`**.
+   * Any computer or smartphone on your local Wi-Fi / Ethernet can manage the mesh using **[client.meshtastic.org](https://client.meshtastic.org)** or the mobile app by pointing to the Bobcat's IP (`<BOBCAT_IP>:4403`).
+3. **Meshtastic to Discord / Telegram Automation Relay**:
+   * Deploy the included [`scripts/meshtastic_bridge.py`](scripts/meshtastic_bridge.py) to forward mesh messages and alerts directly into private Discord channels or Telegram groups.
+   ```bash
+   sudo cp scripts/meshtastic-bridge.service /etc/systemd/system/
+   sudo systemctl enable --now meshtastic-bridge.service
+   ```
+
+### 3. Reticulum & NomadNet: Native 24/7 Off-Grid Mesh
+Unlike Meshtastic, the **Reticulum Network Stack (`rnsd`)** and **NomadNet (`nomadnet`)** run 100% natively on the Bobcat out of the box without any extra dongles:
+* **AutoInterface**: Automatically peers with any phone, PC, or device running Reticulum across your local Wi-Fi and Ethernet.
+* **Encrypted Mesh Router**: Acts as an off-grid packet transport hub on TCP port **`4242`**.
+* **Nomad Pages**: Serves your personal decentralized **`index.mu`** Micron pages and routes LXMF messages 24/7.
+
+---
+
+## High-Utility Edge Services
+
+### 📚 Kiwix Offline Knowledge & Survival Library
+Turn the Bobcat's high-speed 64GB eMMC into a zero-internet survival and knowledge repository:
+* **Standalone Binary**: `kiwix-serve` running on port **`8088`**.
+* **Offline ZIM Archives**: Houses offline copies of Wikipedia Simple, WikiHow, Medical references, and disaster manuals.
+* **Access Anywhere**: Any phone, tablet, or PC on local Wi-Fi can browse Wikipedia with zero cellular or internet connection.
+```bash
+sudo cp scripts/kiwix.service /etc/systemd/system/
+sudo systemctl enable --now kiwix.service
+```
+
+### 📡 Unified Base Station Web Dashboard
+A lightweight, zero-dependency Python dashboard served on port **`80`** displaying live system metrics, LoRaWAN status, Meshtastic node info, and NomadNet pages:
+* **Web UI**: `http://<BOBCAT_IP>/`
+* **JSON API Endpoint**: `http://<BOBCAT_IP>/api/status` (compatible with [Homepage](https://gethomepage.dev) widgets)
+```bash
+sudo cp scripts/bobcat_web.py /usr/local/bin/
+sudo cp scripts/bobcat-web.service /etc/systemd/system/
+sudo systemctl enable --now bobcat-web.service
+```
+
+---
+
+## 📋 Project Roadmap & Future Deployments
+
+- [x] **Armbian eMMC Port:** Permanent autonomous boot on RK3566 with 64GB eMMC storage.
+- [x] **SX1302 Concentrator Activation:** 8-channel LoRaWAN Packet Forwarder to The Things Network (TTN).
+- [x] **Meshtastic Base Station:** 24/7 TCP Serial Bridge (`:4403`) for Heltec V3.
+- [x] **Reticulum & NomadNet Hub:** Autonomous encrypted transport node (`:4242`) & Micron pages.
+- [x] **Kiwix Offline Knowledge Library:** High-speed offline Wikipedia & survival archive (`:8088`).
+- [x] **Meshtastic $\leftrightarrow$ Discord/Telegram Relay Bridge:** Bi-directional bot relay.
+- [x] **Unified Control Panel & Homepage Integration:** Live dashboard on port `80` with `/api/status`.
+- [ ] **Failover DNS & Ad-Blocking:** Deploy AdGuard Home / Pi-hole + Unbound with encrypted upstream DoH/DoT on the Bobcat as secondary LAN DNS.
+- [ ] **TTN $\rightarrow$ Command Center Bridge:** Connect TTN MQTT to Home Assistant & Garrettopia Command Center for ultra long-range LoRa sensor automations and real-time dashboard telemetry.
+- [ ] **ChirpStack Local Server:** Standalone private LoRaWAN Network Server for 100% cloudless local sensor deployments.
+
 
 ---
 
@@ -255,7 +355,7 @@ Edit `~/.reticulum/config` to bridge across your local Ethernet/Wi-Fi and the Lo
   ```
 
 ### 4. Case-Sensitive Wi-Fi SSIDs
-* In Linux / NetworkManager, SSIDs are case-sensitive. Ensure capitalization matches your router (e.g. `Freewifi` vs `freewifi`).
+* In Linux / NetworkManager, SSIDs are case-sensitive. Ensure capitalization matches your router (e.g. `MyHomeNetwork` vs `myhomenetwork`).
 
 ---
 

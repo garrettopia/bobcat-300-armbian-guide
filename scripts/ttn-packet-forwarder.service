@@ -1,0 +1,16 @@
+[Unit]
+Description=The Things Network (TTN) SX1302 Packet Forwarder
+After=network.target lora-hardware-init.service
+Requires=lora-hardware-init.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/sx1302_hal/packet_forwarder
+ExecStartPre=/usr/local/bin/reset_lgw.sh start
+ExecStart=/opt/sx1302_hal/packet_forwarder/lora_pkt_fwd -c /opt/sx1302_hal/packet_forwarder/global_conf.json
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

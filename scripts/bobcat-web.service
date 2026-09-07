@@ -1,0 +1,13 @@
+[Unit]
+Description=Bobcat Mesh Node Web Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /usr/local/bin/bobcat_web.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
