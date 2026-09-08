@@ -329,7 +329,7 @@ sudo systemctl enable --now bobcat-web.service
 - [x] **Kiwix Offline Knowledge Library:** High-speed offline Wikipedia & survival archive (`:8088`).
 - [x] **Meshtastic $\leftrightarrow$ Discord/Telegram Relay Bridge:** Bi-directional bot relay.
 - [x] **Unified Control Panel & Homepage Integration:** Live dashboard on port `80` with `/api/status`.
-- [ ] **Failover DNS & Ad-Blocking:** Deploy AdGuard Home / Pi-hole + Unbound with encrypted upstream DoH/DoT on the Bobcat as secondary LAN DNS.
+- [x] **Failover DNS & Ad-Blocking:** Deploy Pi-hole v6 + Unbound with DNSSEC root recursive resolution and daily primary server sync on port `53` (`:8080`).
 - [ ] **TTN $\rightarrow$ Command Center Bridge:** Connect TTN MQTT to Home Assistant & Garrettopia Command Center for ultra long-range LoRa sensor automations and real-time dashboard telemetry.
 - [ ] **ChirpStack Local Server:** Standalone private LoRaWAN Network Server for 100% cloudless local sensor deployments.
 

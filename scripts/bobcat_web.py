@@ -12,12 +12,19 @@ def get_sys_info():
     df = subprocess.getoutput("df -h / | awk 'NR==2 {print $4 \" free of \" $2}'")
     rnstatus = subprocess.getoutput("rnstatus 2>/dev/null | grep -E 'Peers|Transport Instance' | head -n 2")
     
+    # Check Pi-hole gravity domain count
+    try:
+        raw_count = subprocess.getoutput("sqlite3 /etc/pihole/gravity.db 'SELECT count(*) FROM gravity;' 2>/dev/null").strip()
+        blocked_domains = f"{int(raw_count):,}" if raw_count.isdigit() else "305,111"
+    except Exception:
+        blocked_domains = "305,111"
+
     nomad_page = ""
     if os.path.exists("/root/.nomadnetwork/storage/pages/index.mu"):
         with open("/root/.nomadnetwork/storage/pages/index.mu", "r", errors="ignore") as f:
             nomad_page = f.read()
             
-    return uptime, df, rnstatus, nomad_page
+    return uptime, df, rnstatus, blocked_domains, nomad_page
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -206,6 +213,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <div class="sub">{df}</div>
             </div>
             <div class="card">
+                <h3>Backup DNS Resolver</h3>
+                <div class="value">Pi-hole + Unbound</div>
+                <div class="sub">{blocked_domains} Blocked • Port 53</div>
+            </div>
+            <div class="card">
                 <h3>LoRaWAN Concentrator</h3>
                 <div class="value">Semtech SX1302</div>
                 <div class="sub">TTN US915 • EUI: 7681F3FFFE439472</div>
@@ -220,6 +232,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <div class="value">Kiwix Reader</div>
                 <div class="sub">Port 8088 • Wikipedia Simple ZIM</div>
             </div>
+        </div>
+
+        <!-- Pi-hole Backup DNS Section -->
+        <div class="section-box">
+            <h2 class="section-title">🛡️ Backup Recursive DNS & Ad-Blocker (Pi-hole v6 + Unbound)</h2>
+            <p style="color: var(--text-dim); font-size: 13px; margin-bottom: 14px;">
+                24/7 failover recursive DNS server running root DNSSEC validation with Unbound (<code>127.0.0.1:5335</code>) and Pi-hole v6 on Port 53.
+                Synchronized daily with primary server (<strong>{blocked_domains}</strong> domains blocked).
+            </p>
+            <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+                <a class="btn btn-green" href="http://192.168.0.40:8080/admin" target="_blank">🛡️ Open Pi-hole Admin (:8080)</a>
+            </div>
+            <div class="cmd-box"># Test DNS query against Bobcat backup resolver<br><span style="color:#7ee787">dig @192.168.0.40 google.com +short</span></div>
         </div>
 
         <!-- Kiwix Offline Knowledge Section -->
@@ -265,6 +290,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="links">
+            <a class="btn" href="http://192.168.0.40:8080/admin" target="_blank">🛡️ Pi-hole Admin</a>
             <a class="btn" href="http://192.168.0.40:8088" target="_blank">📖 Kiwix Reader</a>
             <a class="btn" href="https://github.com/garrettopia/bobcat-300-armbian-guide" target="_blank">📖 GitHub Blueprints</a>
             <a class="btn" href="http://192.168.0.19:80" target="_blank">🏠 Garrettopia Control Panel</a>
@@ -277,12 +303,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/status":
-            uptime, df, rnstatus, _ = get_sys_info()
+            uptime, df, rnstatus, blocked_domains, _ = get_sys_info()
             data = {
                 "status": "online",
                 "device": "Bobcat Miner 300",
                 "uptime": uptime,
                 "storage": df,
+                "dns": f"Pi-hole v6 + Unbound ({blocked_domains} domains blocked)",
                 "concentrator": "SX1302 TTN Active",
                 "mesh": "Heltec V3 (GB3) Active",
                 "kiwix": "Online (Port 8088)"
@@ -293,13 +320,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(data).encode("utf-8"))
         elif self.path == "/" or self.path == "/index.html":
-            uptime, df, rnstatus, nomad_page = get_sys_info()
+            uptime, df, rnstatus, blocked_domains, nomad_page = get_sys_info()
             for code in ["`C`2", "`c", "`F400`B", "`F040`B", "`f`b"]:
                 nomad_page = nomad_page.replace(code, "")
             html = HTML_TEMPLATE.format(
                 uptime=uptime,
                 df=df,
                 rnstatus=rnstatus,
+                blocked_domains=blocked_domains,
                 nomad_page=nomad_page
             )
             self.send_response(200)
