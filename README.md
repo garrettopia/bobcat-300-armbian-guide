@@ -56,8 +56,10 @@ Ideal for running a high-power **Meshtastic Base Station** (via attached USB LoR
 
 1. **Bobcat Miner 300** (Model G290 / G295 with RK3566 board).
 2. **12V DC (2A or higher) Power Adapter** (standard 5.5mm x 2.1mm barrel jack).
-3. **USB-to-TTL UART Adapter (3.3V)** (e.g. DSD TECH SH-U09C2, FT232RL, or CP2102). *Ensure it supports 1,500,000 baud.*
-4. **3 Wires / Paperclips / Pogo Pins** (to contact test pads without soldering).
+3. **3.3V TTL UART Interface (1,500,000 baud capable)**:
+   * **Option A**: A high-baud USB-to-UART adapter (e.g., FT232RL, CP2102, DSD TECH SH-U09C2).
+   * **Option B (Recommended)**: The **[Raspberry Pi Zero Hardware Field Kit](https://github.com/garrettopia/pizero-hardware-fieldkit)** using its hardware PL011 UART (`/dev/ttyAMA0` locked to 1.5 Mbaud via `init_uart_clock=48000000`).
+4. **3 Wires / Paperclips / Pogo Pins** (or soldered Dupont wires to contact UART test pads).
 5. **MicroSD Card** (8 GB or larger, class 10 / UHS-1 recommended).
 6. **Ethernet Cable** (recommended for initial setup).
 
@@ -393,7 +395,9 @@ sudo systemctl enable --now bobcat-web.service
 ### 6. Debricking & eMMC Recovery without MicroSD via Hardware UART
 If your Bobcat is bricked or caught in a boot loop and you have no spare MicroSD card:
 1. Solder Dupont wires to the 3 test pads next to the Micro-USB port (`GND`, `TX` &rarr; Adapter RX, `RX` &rarr; Adapter TX).
-2. Connect to the serial console at `1500000 8N1` (e.g. using a Raspberry Pi Zero or FTDI adapter).
+2. Connect to the serial console at `1500000 8N1`:
+   * Using the **[Raspberry Pi Zero Hardware Field Kit](https://github.com/garrettopia/pizero-hardware-fieldkit)**: Connect GND to Pin 06, Bobcat TX to Pi Pin 10 (GPIO 15), and Bobcat RX to Pi Pin 08 (GPIO 14).
+   * Or attach a standard 1.5 Mbaud USB-to-UART dongle.
 3. Power cycle the Bobcat and send `Ctrl+C` repeatedly within 2 seconds to catch the U-Boot prompt (`=>`).
 4. Manually load the kernel, initrd, and device tree from eMMC into RAM:
    ```text
