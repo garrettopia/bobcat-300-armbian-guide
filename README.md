@@ -28,7 +28,7 @@ Ideal for running a high-power **Meshtastic Base Station** (via attached USB LoR
    * [Verify Hardware Health & Register Communication](#step-3-verify-hardware-health--register-communication)
 6. [Wireless Architecture: LoRaWAN, Meshtastic & Reticulum](#wireless-architecture-lorawan-meshtastic--reticulum)
    * [1. Onboard Semtech SX1302: Commercial LoRaWAN Gateway](#1-onboard-semtech-sx1302-commercial-lorawan-gateway)
-   * [2. Meshtastic Base Station: Adding an SX1262 Node via USB](#2-meshtastic-base-station-adding-an-sx1262-node-via-usb)
+   * [2. Meshtastic Architecture: USB Microcontroller Node vs. Native SX1262 Integration](#2-meshtastic-architecture-usb-microcontroller-node-vs-native-sx1262-integration)
    * [3. Reticulum & NomadNet: Native 24/7 Off-Grid Mesh](#3-reticulum--nomadnet-native-247-off-grid-mesh)
 7. [Troubleshooting & Gotchas](#troubleshooting--gotchas)
 8. [License & Acknowledgments](#license--acknowledgments)
@@ -276,22 +276,47 @@ The card in the mini-PCIe slot is an **8-channel commercial LoRaWAN concentrator
    sudo systemctl enable --now ttn-packet-forwarder.service
    ```
 
-### 2. Meshtastic Base Station: Adding an SX1262 Node via USB
-Meshtastic's peer-to-peer (P2P) protocol is engineered specifically for **single-channel transceivers** (like the **Semtech SX1262** or **SX1276**) rather than multi-channel concentrators.
+### 2. Meshtastic Architecture: USB Microcontroller Node vs. Native SX1262 Integration
 
-To turn your Bobcat into a high-powered 24/7 **Meshtastic Base Station**:
-1. **Connect a Node to the Bobcat's USB Port**:
-   * Plug in an inexpensive **Heltec V3 ($15–$20)**, **LilyGO T-Beam**, or USB LoRa dongle.
-2. **The Bobcat Acts as the 24/7 Brain & Gateway**:
-   * The Bobcat supplies continuous 12V-regulated power to the node.
-   * Runs the Meshtastic serial-to-TCP bridge (`ser2net`) on port **`4403`**.
-   * Any computer or smartphone on your local Wi-Fi / Ethernet can manage the mesh using **[client.meshtastic.org](https://client.meshtastic.org)** or the mobile app by pointing to the Bobcat's IP (`<BOBCAT_IP>:4403`).
-3. **Meshtastic to Discord / Telegram Automation Relay**:
-   * Deploy the included [`scripts/meshtastic_bridge.py`](scripts/meshtastic_bridge.py) to forward mesh messages and alerts directly into private Discord channels or Telegram groups.
-   ```bash
-   sudo cp scripts/meshtastic-bridge.service /etc/systemd/system/
-   sudo systemctl enable --now meshtastic-bridge.service
-   ```
+Meshtastic's peer-to-peer (P2P) protocol is engineered specifically for **single-channel transceivers** (like the **Semtech SX1262** or **SX1276**) rather than multi-channel concentrators. 
+
+When repurposing the Bobcat Miner 300 for Meshtastic, there are two distinct architectural approaches:
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ OPTION A: External USB Microcontroller Node (Heltec V3 / LilyGO T-Beam)           │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│  [Heltec V3 (ESP32-S3)]  <──(Main Controller)──>  Runs Meshtastic C++ Firmware   │
+│         │ (USB Serial)                                                           │
+│  [Bobcat Miner (RK3566)] <──(Host Infrastructure)─> Runs ser2net (:4403) & Bots │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ OPTION B: Native SX1262 LoRa Module via SPI / GPIO (Phase 2 - In Development)    │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│  [Bobcat Miner (RK3566)] <──(Main Controller)──>  Runs native Linux meshtasticd  │
+│         │ (Direct SPI/GPIO)                                                      │
+│  [Waveshare SX1262 Chip] <──(Raw Radio Front-End)─> Direct RF Transmission       │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Approach A: External Microcontroller Node via USB (Available Today)
+* **Controller**: The external microcontroller (**ESP32-S3** or **nRF52840** on the Heltec/T-Beam) acts as the **primary controller/brain** of the Meshtastic system, executing the core radio firmware and mesh routing logic.
+* **Bobcat Role**: The Bobcat functions as high-capacity host infrastructure:
+  1. Supplies continuous 12V-regulated power over USB.
+  2. Bridges the radio's serial stream to TCP via `ser2net` on port **`4403`**, allowing any smartphone or PC on local Wi-Fi to configure the mesh via **[client.meshtastic.org](https://client.meshtastic.org)**.
+  3. Executes automation relays ([`scripts/meshtastic_bridge.py`](scripts/meshtastic_bridge.py)) to mirror mesh traffic into private Discord/Telegram channels.
+  ```bash
+  sudo cp scripts/meshtastic-bridge.service /etc/systemd/system/
+  sudo systemctl enable --now meshtastic-bridge.service
+  ```
+
+#### Approach B: Native SX1262 LoRa Integration via SPI/GPIO (Phase 2 Roadmap)
+* **Controller**: The Bobcat Miner 300's **Rockchip RK3566 Quad-Core SoC** becomes the **native primary controller**, running the official Linux **`meshtasticd`** daemon directly inside Armbian.
+* **Hardware Interface**: A raw **Semtech SX1262 transceiver** (such as a Waveshare SX1262 module or mini-PCIe form-factor card) interfaces directly with the RK3566 via SPI (`/dev/spidev5.0` / SPI0) and dedicated GPIO lines (Reset, Busy, DIO1 interrupt).
+* **Key Advantages**:
+  * **All-in-One Form Factor**: No external USB dongles, breakout boards, or loose cables outside the enclosure.
+  * **Massive Compute Headroom**: Eliminates microcontroller RAM/flash constraints, enabling extensive message packet caching, fast encryption, and integrated edge routing.
 
 ### 3. Reticulum & NomadNet: Native 24/7 Off-Grid Mesh
 Unlike Meshtastic, the **Reticulum Network Stack (`rnsd`)** and **NomadNet (`nomadnet`)** run 100% natively on the Bobcat out of the box without any extra dongles:
@@ -385,6 +410,6 @@ If your Bobcat is bricked or caught in a boot loop and you have no spare MicroSD
 ## License & Acknowledgments
 
 * Licensed under the **MIT License**.
-* Developed for and tested on the **Bobcat Miner 300 (RK3566 / G290 / G295)**.
+* Developed and tested by **Garrettopia** on the **Bobcat Miner 300 (RK3566 / G290 / G295)**.
 * Dedicated to the **Meshtastic**, **LoRaWAN**, and open-source hardware communities. Reclaim your e-waste!
 
