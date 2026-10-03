@@ -116,7 +116,7 @@ def on_receive(packet, interface):
         print(f"[!] Error processing packet: {e}")
 
 def main():
-    print("[*] Starting Garrettopia Meshtastic Relay Bridge...")
+    print("[*] Starting Meshtastic Relay Bridge...")
     config = load_config()
 
     while True:

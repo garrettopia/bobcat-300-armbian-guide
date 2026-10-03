@@ -99,7 +99,7 @@ def main():
     # 5. Write and compile universal boot.cmd
     print("[4/6] Generating universal U-Boot script...")
     boot_cmd_content = f"""# Armbian RK3566 Universal Boot Script (SD & eMMC)
-setenv bootargs "console=tty1 console=ttyS2,1500000 console=ttyFIQ0,1500000 earlycon=uart8250,mmio32,0xfe660000 root=PARTUUID={partuuid} rootwait rw init=/sbin/init loglevel=8 keep_bootcon no_console_suspend"
+setenv bootargs "console=ttyS2,1500000 console=tty1 earlycon=uart8250,mmio32,0xfe660000 root=PARTUUID={partuuid} rootwait rw init=/sbin/init loglevel=8 keep_bootcon no_console_suspend"
 
 if test -z "${{kernel_addr_r}}"; then setenv kernel_addr_r 0x00280000; fi
 if test -z "${{ramdisk_addr_r}}"; then setenv ramdisk_addr_r 0x0a200000; fi
@@ -107,7 +107,7 @@ if test -z "${{fdt_addr_r}}"; then setenv fdt_addr_r 0x08300000; fi
 if test -z "${{devnum}}"; then setenv devnum 1; fi
 
 load mmc ${{devnum}}:1 ${{kernel_addr_r}} Image || load mmc 1:1 ${{kernel_addr_r}} Image || load mmc 0:1 ${{kernel_addr_r}} Image
-load mmc ${{devnum}:1 ${{ramdisk_addr_r}} uInitrd || load mmc 1:1 ${{ramdisk_addr_r}} uInitrd || load mmc 0:1 ${{ramdisk_addr_r}} uInitrd
+load mmc ${{devnum}}:1 ${{ramdisk_addr_r}} uInitrd || load mmc 1:1 ${{ramdisk_addr_r}} uInitrd || load mmc 0:1 ${{ramdisk_addr_r}} uInitrd
 load mmc ${{devnum}}:1 ${{fdt_addr_r}} dtb/rockchip/rk3566-bobcat.dtb || load mmc 1:1 ${{fdt_addr_r}} dtb/rockchip/rk3566-bobcat.dtb || load mmc 0:1 ${{fdt_addr_r}} dtb/rockchip/rk3566-bobcat.dtb
 
 booti ${{kernel_addr_r}} ${{ramdisk_addr_r}} ${{fdt_addr_r}}

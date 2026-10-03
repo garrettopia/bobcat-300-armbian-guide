@@ -1,5 +1,5 @@
 [Unit]
-Description=Garrettopia Meshtastic to Discord/Telegram Relay Bridge
+Description=Meshtastic to Discord/Telegram Relay Bridge
 After=network.target ser2net.service
 Requires=ser2net.service
 

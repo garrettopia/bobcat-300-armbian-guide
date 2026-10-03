@@ -72,14 +72,16 @@ MNT_BOOT="/tmp/emmc_boot_mnt"
 mkdir -p "$MNT_BOOT"
 mount -t vfat -o iocharset=ascii "${DST_DEV}p1" "$MNT_BOOT" || mount "${DST_DEV}p1" "$MNT_BOOT"
 
-PARTUUID=$(blkid -s PARTUUID -o value "${DST_DEV}p2")
-if [ -z "$PARTUUID" ]; then
-    PARTUUID="f337a2ab-32cc-594f-a090-3a7d85a53c48"
+PARTUUID=$(blkid -s PARTUUID -o value "${DST_DEV}p2" 2>/dev/null || true)
+if [ -n "$PARTUUID" ]; then
+    ROOT_ARG="root=PARTUUID=${PARTUUID}"
+else
+    ROOT_ARG="root=${DST_DEV}p2"
 fi
 
 cat << EOF > "$MNT_BOOT/boot.cmd"
 # Armbian RK3566 Universal Boot Script (SD & eMMC)
-setenv bootargs "console=tty1 console=ttyS2,1500000 console=ttyFIQ0,1500000 earlycon=uart8250,mmio32,0xfe660000 root=PARTUUID=${PARTUUID} rootwait rw init=/sbin/init loglevel=8 keep_bootcon no_console_suspend"
+setenv bootargs "console=ttyS2,1500000 console=tty1 earlycon=uart8250,mmio32,0xfe660000 ${ROOT_ARG} rootwait rw init=/sbin/init loglevel=8 keep_bootcon no_console_suspend"
 
 if test -z "\${kernel_addr_r}"; then setenv kernel_addr_r 0x00280000; fi
 if test -z "\${ramdisk_addr_r}"; then setenv ramdisk_addr_r 0x0a200000; fi

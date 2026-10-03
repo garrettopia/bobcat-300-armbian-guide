@@ -137,40 +137,45 @@ This script automatically:
 
 Running off a MicroSD card long-term leads to SD wear and slower I/O. The Bobcat has a high-speed **64GB eMMC 5.1** chip soldered directly on the PCB.
 
-While logged in as root on the Bobcat:
+While logged in as root on the Bobcat (either booted from MicroSD or via serial shell):
 
 ```bash
 # 1. Clone the operating system directly from SD to internal eMMC:
 dd if=/dev/mmcblk0 of=/dev/mmcblk1 bs=4M count=700 status=progress
 sync
 
-# 2. Mount the eMMC boot partition:
+# 2. Re-read partition table and mount the eMMC boot partition:
+partprobe /dev/mmcblk1
 mkdir -p /mnt/emmc_boot
 mount -t vfat -o iocharset=ascii /dev/mmcblk1p1 /mnt/emmc_boot
 
-# 3. Create the universal U-Boot script on eMMC:
-cat << 'EOF' > /mnt/emmc_boot/boot.cmd
+# 3. Extract the exact eMMC Root PARTUUID:
+EMMC_PARTUUID=$(blkid -s PARTUUID -o value /dev/mmcblk1p2)
+echo "eMMC Root PARTUUID: ${EMMC_PARTUUID}"
+
+# 4. Generate the universal U-Boot boot script for eMMC:
+cat << EOF > /mnt/emmc_boot/boot.cmd
 # Armbian RK3566 Universal Boot Script (eMMC & SD)
-setenv bootargs "console=tty1 console=ttyS2,1500000 console=ttyFIQ0,1500000 earlycon=uart8250,mmio32,0xfe660000 root=PARTUUID=f337a2ab-32cc-594f-a090-3a7d85a53c48 rootwait rw init=/sbin/init loglevel=8 keep_bootcon no_console_suspend"
+setenv bootargs "console=ttyS2,1500000 console=tty1 earlycon=uart8250,mmio32,0xfe660000 root=PARTUUID=${EMMC_PARTUUID} rootwait rw init=/sbin/init loglevel=8 keep_bootcon no_console_suspend"
 
-if test -z "${kernel_addr_r}"; then setenv kernel_addr_r 0x00280000; fi
-if test -z "${ramdisk_addr_r}"; then setenv ramdisk_addr_r 0x0a200000; fi
-if test -z "${fdt_addr_r}"; then setenv fdt_addr_r 0x08300000; fi
-if test -z "${devnum}"; then setenv devnum 0; fi
+if test -z "\${kernel_addr_r}"; then setenv kernel_addr_r 0x00280000; fi
+if test -z "\${ramdisk_addr_r}"; then setenv ramdisk_addr_r 0x0a200000; fi
+if test -z "\${fdt_addr_r}"; then setenv fdt_addr_r 0x08300000; fi
+if test -z "\${devnum}"; then setenv devnum 0; fi
 
-load mmc ${devnum}:1 ${kernel_addr_r} Image || load mmc 0:1 ${kernel_addr_r} Image || load mmc 1:1 ${kernel_addr_r} Image
-load mmc ${devnum}:1 ${ramdisk_addr_r} uInitrd || load mmc 0:1 ${ramdisk_addr_r} uInitrd || load mmc 1:1 ${ramdisk_addr_r} uInitrd
-load mmc ${devnum}:1 ${fdt_addr_r} dtb/rockchip/rk3566-bobcat.dtb || load mmc 0:1 ${fdt_addr_r} dtb/rockchip/rk3566-bobcat.dtb || load mmc 1:1 ${fdt_addr_r} dtb/rockchip/rk3566-bobcat.dtb
+load mmc \${devnum}:1 \${kernel_addr_r} Image || load mmc 0:1 \${kernel_addr_r} Image || load mmc 1:1 \${kernel_addr_r} Image
+load mmc \${devnum}:1 \${ramdisk_addr_r} uInitrd || load mmc 0:1 \${ramdisk_addr_r} uInitrd || load mmc 1:1 \${ramdisk_addr_r} uInitrd
+load mmc \${devnum}:1 \${fdt_addr_r} dtb/rockchip/rk3566-bobcat.dtb || load mmc 0:1 \${fdt_addr_r} dtb/rockchip/rk3566-bobcat.dtb || load mmc 1:1 \${fdt_addr_r} dtb/rockchip/rk3566-bobcat.dtb
 
-booti ${kernel_addr_r} ${ramdisk_addr_r} ${fdt_addr_r}
+booti \${kernel_addr_r} \${ramdisk_addr_r} \${fdt_addr_r}
 EOF
 
-# 4. Compile the U-Boot boot.scr binary:
+# 5. Compile the U-Boot boot.scr binary:
 mkimage -C none -A arm64 -T script -d /mnt/emmc_boot/boot.cmd /mnt/emmc_boot/boot.scr
 sync
 umount /mnt/emmc_boot
 
-# 5. Clean up and power off
+# 6. Clean up and power off
 poweroff
 ```
 
@@ -264,7 +269,7 @@ The card in the mini-PCIe slot is an **8-channel commercial LoRaWAN concentrator
    make
    ```
 2. **Configure US915 Frequency Plan & Gateway EUI**:
-   Derive your unique 64-bit Gateway EUI from your ethernet MAC address (e.g. `76:81:f3:43:94:72` -> `7681F3FFFE439472`) and set `server_address` to `nam1.cloud.thethings.network` on port `1700`.
+   Derive your unique 64-bit Gateway EUI from your ethernet MAC address (e.g. `00:11:22:33:44:55` -> `001122FFFE334455`) and set `server_address` to `nam1.cloud.thethings.network` on port `1700`.
 3. **Automate via Systemd**:
    ```bash
    sudo cp scripts/ttn-packet-forwarder.service /etc/systemd/system/
@@ -329,8 +334,8 @@ sudo systemctl enable --now bobcat-web.service
 - [x] **Kiwix Offline Knowledge Library:** High-speed offline Wikipedia & survival archive (`:8088`).
 - [x] **Meshtastic $\leftrightarrow$ Discord/Telegram Relay Bridge:** Bi-directional bot relay.
 - [x] **Unified Control Panel & Homepage Integration:** Live dashboard on port `80` with `/api/status`.
-- [x] **Failover DNS & Ad-Blocking:** Deploy Pi-hole v6 + Unbound with DNSSEC root recursive resolution and daily primary server sync on port `53` (`:8080`).
-- [ ] **TTN $\rightarrow$ Command Center Bridge:** Connect TTN MQTT to Home Assistant & Garrettopia Command Center for ultra long-range LoRa sensor automations and real-time dashboard telemetry.
+- [x] **Failover DNS & Ad-Blocking:** Deploy Pi-hole v6 + Unbound with DNSSEC root recursive resolution and failover DNS on port `53` (`:8080`).
+- [ ] **TTN $\rightarrow$ Local Command Center Bridge:** Connect TTN MQTT to Home Assistant / local command center for ultra long-range LoRa sensor automations and real-time telemetry.
 - [ ] **ChirpStack Local Server:** Standalone private LoRaWAN Network Server for 100% cloudless local sensor deployments.
 
 
@@ -342,25 +347,44 @@ sudo systemctl enable --now bobcat-web.service
 * **Cause**: In UART, 0V (LOW) represents a Start Bit. If your adapter's **RX wire** is touching Ground (0V) or bridging to the metal shield, the adapter detects a permanent break condition and fills the buffer with `0x00`.
 * **Fix**: Ensure the RX probe only touches the gold `TX` test pad and does not bridge to `GND`.
 
-### 2. Kernel Panic: `Unable to mount root fs on unknown-block(179,2)`
-* **Cause**: Hardcoding `/dev/mmcblk0p2` in `bootargs`. When an SD card is inserted, device enumeration indices shift between `mmcblk0` and `mmcblk1`.
-* **Fix**: Always specify `root=PARTUUID=<GUID>` in `bootargs`. The Linux kernel parses GPT partition GUIDs natively without relying on device numbers.
+### 2. Kernel Panic: `Unable to mount root fs on unknown-block(179,2)` / Stale PARTUUID
+* **Cause**: Hardcoding `/dev/mmcblk0p2` or a stale MicroSD card `PARTUUID` in `bootargs`. When an SD card is removed or system reboots from eMMC, device indices change (`/dev/mmcblk1`).
+* **Fix**: Always query the target partition's true GUID (`blkid -s PARTUUID -o value /dev/mmcblk1p2`) or specify `root=/dev/mmcblk1p2 rootwait` in `boot.cmd` and recompile `boot.scr`.
 
-### 3. Wi-Fi Device Marked `unmanaged` in NetworkManager
-* **Cause**: If an interface is listed in Debian's legacy `/etc/network/interfaces`, NetworkManager ignores it.
-* **Fix**: Remove `/etc/network/interfaces` and restart NetworkManager:
-  ```bash
-  rm -f /etc/network/interfaces
-  systemctl restart NetworkManager
-  ```
+### 3. The "Burnt Out" Ethernet Port Red Herring (Post-Outage Failure)
+* **Symptom**: After a sudden power cut or surge, the Bobcat does not negotiate Ethernet link, the RJ45 link lights stay completely off, and the device is unreachable via IP.
+* **Root Cause**: On the Rockchip RK3566, the onboard `Motorcomm YT8512B` Ethernet PHY is **driver-initialized**. If a corrupted bootloader configuration (such as a mismatched PARTUUID) causes the Linux kernel to panic during early boot, the kernel never gets to the network driver initialization step. The hardware is **100% undamaged**—it is simply stuck in an early bootloader panic loop.
+* **Fix**: Attach a 3.3V UART serial adapter @ 1,500,000 baud to the TX/RX test pads to verify boot output, boot the kernel, and repair `/boot/boot.scr`.
 
-### 4. Case-Sensitive Wi-Fi SSIDs
-* In Linux / NetworkManager, SSIDs are case-sensitive. Ensure capitalization matches your router (e.g. `MyHomeNetwork` vs `myhomenetwork`).
+### 4. Internal Micro-USB Port: Device/Client Mode (No Host 5V Power)
+* **Symptom**: Plugging a USB-to-Ethernet adapter or USB drive into the internal Micro-USB port does not illuminate or detect devices (`lsusb` shows empty).
+* **Cause**: The internal Micro-USB port on the Bobcat is hardware-strapped as an **OTG Client/Device port** for Rockchip Maskrom firmware flashing. It does not provide 5V VBUS power to host external USB accessories unless externally powered via an OTG Y-cable.
+* **Fix**: Use the native onboard RJ45 Ethernet port (`end0`), which is fully supported at 100/1000 Mbps.
+
+### 5. Silent Serial Console (`ttyFIQ0` vs `ttyS2`)
+* **Cause**: Rockchip vendor trees sometimes set `console=ttyFIQ0,1500000`, which diverts `/dev/console` stdin to the kernel FIQ debugger.
+* **Fix**: Always set `console=ttyS2,1500000 console=tty1` in `boot.cmd` so standard terminal input/output works reliably over the hardware test pads.
+
+### 6. Debricking & eMMC Recovery without MicroSD via Hardware UART
+If your Bobcat is bricked or caught in a boot loop and you have no spare MicroSD card:
+1. Solder Dupont wires to the 3 test pads next to the Micro-USB port (`GND`, `TX` &rarr; Adapter RX, `RX` &rarr; Adapter TX).
+2. Connect to the serial console at `1500000 8N1` (e.g. using a Raspberry Pi Zero or FTDI adapter).
+3. Power cycle the Bobcat and send `Ctrl+C` repeatedly within 2 seconds to catch the U-Boot prompt (`=>`).
+4. Manually load the kernel, initrd, and device tree from eMMC into RAM:
+   ```text
+   => setenv bootargs "console=ttyS2,1500000 console=tty1 root=/dev/mmcblk1p2 rootwait rw init=/sbin/init"
+   => load mmc 0:1 0x00280000 Image
+   => load mmc 0:1 0x0a200000 uInitrd
+   => load mmc 0:1 0x08300000 dtb/rockchip/rk3566-bobcat.dtb
+   => booti 0x00280000 0x0a200000 0x08300000
+   ```
+5. Once in the Linux root shell, update `/boot/boot.cmd` and recompile `/boot/boot.scr` with `mkimage`.
 
 ---
 
 ## License & Acknowledgments
 
 * Licensed under the **MIT License**.
-* Developed and tested by **Garrettopia**.
-* Dedicated to the **Meshtastic** and open-source hardware communities. Reclaim your e-waste!
+* Developed for and tested on the **Bobcat Miner 300 (RK3566 / G290 / G295)**.
+* Dedicated to the **Meshtastic**, **LoRaWAN**, and open-source hardware communities. Reclaim your e-waste!
+

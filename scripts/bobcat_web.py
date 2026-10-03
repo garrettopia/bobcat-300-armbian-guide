@@ -31,7 +31,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Garrettopia Edge Station | Bobcat 300</title>
+    <title>Edge Station | Bobcat 300</title>
     <style>
         :root {{
             --bg: #0d1117;
@@ -200,8 +200,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="container">
         <div class="header">
             <div>
-                <h1 class="title">📡 Garrettopia Edge Base Station</h1>
-                <div style="color: var(--text-dim); font-size: 13px; margin-top: 4px;">Bobcat Miner 300 (RK3566) • Armbian Bookworm • Uptime: {uptime}</div>
+                <h1 class="title">📡 Edge Base Station</h1>
+                <div style="color: var(--text-dim); font-size: 13px; margin-top: 4px;">Bobcat Miner 300 (RK3566) • Armbian Linux • Uptime: {uptime}</div>
             </div>
             <div class="badge">ONLINE (eMMC)</div>
         </div>
@@ -220,11 +220,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="card">
                 <h3>LoRaWAN Concentrator</h3>
                 <div class="value">Semtech SX1302</div>
-                <div class="sub">TTN US915 • EUI: 7681F3FFFE439472</div>
+                <div class="sub">TTN US915 Concentrator</div>
             </div>
             <div class="card">
                 <h3>Meshtastic Base Station</h3>
-                <div class="value">Heltec V3 (GB3)</div>
+                <div class="value">SX1262 LoRa</div>
                 <div class="sub">TCP Bridge :4403 • US915</div>
             </div>
             <div class="card">
@@ -236,15 +236,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         <!-- Pi-hole Backup DNS Section -->
         <div class="section-box">
-            <h2 class="section-title">🛡️ Backup Recursive DNS & Ad-Blocker (Pi-hole v6 + Unbound)</h2>
+            <h2 class="section-title">🛡️ Recursive DNS & Ad-Blocker (Pi-hole v6 + Unbound)</h2>
             <p style="color: var(--text-dim); font-size: 13px; margin-bottom: 14px;">
-                24/7 failover recursive DNS server running root DNSSEC validation with Unbound (<code>127.0.0.1:5335</code>) and Pi-hole v6 on Port 53.
-                Synchronized daily with primary server (<strong>{blocked_domains}</strong> domains blocked).
+                Failover recursive DNS server running root DNSSEC validation with Unbound (<code>127.0.0.1:5335</code>) and Pi-hole v6 on Port 53.
+                (<strong>{blocked_domains}</strong> domains blocked).
             </p>
             <div style="display: flex; gap: 10px; margin-bottom: 14px;">
-                <a class="btn btn-green" href="http://192.168.0.40:8080/admin" target="_blank">🛡️ Open Pi-hole Admin (:8080)</a>
+                <a class="btn btn-green" href=":8080/admin" onclick="this.href='http://' + window.location.hostname + ':8080/admin'" target="_blank">🛡️ Open Pi-hole Admin (:8080)</a>
             </div>
-            <div class="cmd-box"># Test DNS query against Bobcat backup resolver<br><span style="color:#7ee787">dig @192.168.0.40 google.com +short</span></div>
+            <div class="cmd-box"># Test DNS query against local resolver<br><span style="color:#7ee787">dig @127.0.0.1 example.com +short</span></div>
         </div>
 
         <!-- Kiwix Offline Knowledge Section -->
@@ -254,7 +254,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 Instant, zero-internet offline access to Wikipedia, medical references, repair guides, and survival manuals served locally from the Bobcat's high-speed eMMC storage.
             </p>
             <div>
-                <a class="btn btn-purple" href="http://192.168.0.40:8088" target="_blank">📖 Open Kiwix Offline Library (:8088)</a>
+                <a class="btn btn-purple" href=":8088" onclick="this.href='http://' + window.location.hostname + ':8088'" target="_blank">📖 Open Kiwix Offline Library (:8088)</a>
             </div>
         </div>
 
@@ -262,7 +262,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <div class="section-box">
             <h2 class="section-title">📻 Meshtastic LoRa Base Station & Relay Bridge</h2>
             <p style="color: var(--text-dim); font-size: 13px; margin-bottom: 14px;">
-                Node: <strong>Garrettopia Bobcat300 Mesh (GB3)</strong> • Connected via USB <code>/dev/ttyUSB0</code>.
                 The 24/7 TCP bridge on port <strong>4403</strong> connects mobile apps (iOS/Android) and automation bots to the radio.
             </p>
             <div style="display: flex; gap: 10px; margin-bottom: 14px;">
@@ -279,7 +278,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 Onboard SX1302 mini-PCIe card running Semtech Packet Forwarder over SPI5 (<code>/dev/spidev5.0</code>).
                 Forwarding 8 channels simultaneously to <code>nam1.cloud.thethings.network:1700</code>.
             </p>
-            <div class="cmd-box"># Gateway EUI for TTN Console registration<br><span style="color:#7ee787">7681F3FFFE439472</span></div>
             <div class="cmd-box"># Monitor real-time LoRaWAN packets<br><span style="color:#7ee787">journalctl -u ttn-packet-forwarder.service -f</span></div>
         </div>
 
@@ -290,10 +288,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class="links">
-            <a class="btn" href="http://192.168.0.40:8080/admin" target="_blank">🛡️ Pi-hole Admin</a>
-            <a class="btn" href="http://192.168.0.40:8088" target="_blank">📖 Kiwix Reader</a>
-            <a class="btn" href="https://github.com/garrettopia/bobcat-300-armbian-guide" target="_blank">📖 GitHub Blueprints</a>
-            <a class="btn" href="http://192.168.0.19:80" target="_blank">🏠 Garrettopia Control Panel</a>
+            <a class="btn" href=":8080/admin" onclick="this.href='http://' + window.location.hostname + ':8080/admin'" target="_blank">🛡️ Pi-hole Admin</a>
+            <a class="btn" href=":8088" onclick="this.href='http://' + window.location.hostname + ':8088'" target="_blank">📖 Kiwix Reader</a>
+            <a class="btn" href="https://github.com/garrettopia/bobcat-300-armbian-guide" target="_blank">📖 GitHub Repository</a>
         </div>
     </div>
 </body>
