@@ -146,6 +146,10 @@ While logged in as root on the Bobcat (either booted from MicroSD or via serial 
 dd if=/dev/mmcblk0 of=/dev/mmcblk1 bs=4M count=700 status=progress
 sync
 
+# Note: count=700 copies the first ~2.8 GB (partition table, bootloader, & system).
+# This finishes in ~30 seconds rather than waiting 45+ minutes to write 64 GB of zeros!
+# Armbian's resize service expands the filesystem to the full 57.6 GiB on first standalone boot.
+
 # 2. Re-read partition table and mount the eMMC boot partition:
 partprobe /dev/mmcblk1
 mkdir -p /mnt/emmc_boot
@@ -341,9 +345,12 @@ sudo systemctl enable --now kiwix.service
 ```
 
 ### 📡 Unified Base Station Web Dashboard
-A lightweight, zero-dependency Python dashboard served on port **`80`** displaying live system metrics, LoRaWAN status, Meshtastic node info, and NomadNet pages:
+A lightweight dashboard served on port **`80`** displaying live system metrics, LoRaWAN status, Meshtastic node info, and NomadNet pages:
 * **Web UI**: `http://<BOBCAT_IP>/`
 * **JSON API Endpoint**: `http://<BOBCAT_IP>/api/status` (compatible with [Homepage](https://gethomepage.dev) widgets)
+* **Implementation Options**:
+  * **Python (Standard)**: Zero-dependency script (`scripts/bobcat_web.py`) using only Python 3 standard library.
+  * **Rust (`bobcat-web-rs`)**: Ultra-lightweight native binary (~180 KB) with sub-1% memory footprint, ideal for preserving maximum RAM on 2 GB SBCs.
 ```bash
 sudo cp scripts/bobcat_web.py /usr/local/bin/
 sudo cp scripts/bobcat-web.service /etc/systemd/system/
